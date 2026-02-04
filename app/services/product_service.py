@@ -9,8 +9,8 @@ from ..utils.file import save_image, delete_image
 class ProductService:
 
     @staticmethod
-    def list_paginated(page, per_page, category_ids=None, tag_ids=None):
-        return ProductRepository.get_paginated(page, per_page, category_ids, tag_ids)
+    def list_paginated(page, per_page, category_ids=None, tag_ids=None, provider_ids=None):
+        return ProductRepository.get_paginated(page, per_page, category_ids, tag_ids, provider_ids)
 
     @staticmethod
     def get_by_id(product_id):

@@ -1,159 +1,145 @@
+"""
+Schemas para validación y serialización de productos.
+"""
+from flask import request
+
+
 class ProductCreateSchema:
+    """Schema para validar creación de productos"""
+    
     @staticmethod
     def validate(data):
-        if not data or not isinstance(data, dict):
-            return None, {'general': 'Se requiere un objeto JSON'}
-
         errors = {}
-
-        # name — obligatorio
-        name = data.get('name')
-        if name is None or not str(name).strip():
-            errors['name'] = 'El nombre es requerido'
-        elif len(str(name).strip()) > 200:
-            errors['name'] = 'El nombre no puede superar 200 caracteres'
-
-        # price — obligatorio, numero no negativo
-        price = data.get('price')
-        if price is None:
-            errors['price'] = 'El precio es requerido'
-        else:
-            try:
-                price_val = float(price)
-                if price_val < 0:
-                    errors['price'] = 'El precio no puede ser negativo'
-            except (ValueError, TypeError):
-                errors['price'] = 'El precio debe ser un numero'
-
-        # category_ids — lista opcional de enteros
+        
+        # Validar name (requerido)
+        if not data.get('name') or not data['name'].strip():
+            errors['name'] = 'El nombre es obligatorio'
+        
+        # Validar price (requerido, debe ser número positivo)
+        try:
+            price = float(data.get('price', 0))
+            if price <= 0:
+                errors['price'] = 'El precio debe ser mayor a 0'
+            data['price'] = price
+        except (ValueError, TypeError):
+            errors['price'] = 'El precio debe ser un número válido'
+        
+        # Validar category_ids (requerido, al menos una)
         category_ids = data.get('category_ids', [])
-        if not isinstance(category_ids, list):
-            errors['category_ids'] = 'Debe ser una lista'
-        elif not all(isinstance(i, int) for i in category_ids):
-            errors['category_ids'] = 'Cada elemento debe ser un entero'
-
-        # tag_ids — lista opcional de enteros
-        tag_ids = data.get('tag_ids', [])
-        if not isinstance(tag_ids, list):
-            errors['tag_ids'] = 'Debe ser una lista'
-        elif not all(isinstance(i, int) for i in tag_ids):
-            errors['tag_ids'] = 'Cada elemento debe ser un entero'
-
-        # provider_ids — lista opcional de enteros
-        provider_ids = data.get('provider_ids', [])
-        if not isinstance(provider_ids, list):
-            errors['provider_ids'] = 'Debe ser una lista'
-        elif not all(isinstance(i, int) for i in provider_ids):
-            errors['provider_ids'] = 'Cada elemento debe ser un entero'
-
+        if not category_ids or len(category_ids) == 0:
+            errors['category_ids'] = 'Debe seleccionar al menos una categoría'
+        
+        # Validar tag_ids (opcional, pero debe ser lista si existe)
+        if 'tag_ids' not in data:
+            data['tag_ids'] = []
+        
+        # Validar provider_ids (opcional, pero debe ser lista si existe)
+        if 'provider_ids' not in data:
+            data['provider_ids'] = []
+        
+        # Si hay errores, retornar None y el dict de errores
         if errors:
             return None, errors
-
-        return {
-            'name':         str(name).strip(),
-            'description':  str(data['description']).strip() if data.get('description') else None,
-            'price':        float(price),
-            'category_ids': category_ids,
-            'tag_ids':      tag_ids,
-            'provider_ids': provider_ids,
-        }, None
+        
+        # Retornar datos validados
+        return data, None
 
 
 class ProductUpdateSchema:
+    """Schema para validar actualización de productos"""
+    
     @staticmethod
     def validate(data):
-        if not data or not isinstance(data, dict):
-            return None, {'general': 'Se requiere un objeto JSON'}
-
-        errors  = {}
-        cleaned = {}
-
+        errors = {}
+        
+        # Validar name (opcional en update, pero si viene debe tener valor)
         if 'name' in data:
-            name = data['name']
-            if not str(name).strip():
-                errors['name'] = 'El nombre no puede estar vacio'
-            elif len(str(name).strip()) > 200:
-                errors['name'] = 'El nombre no puede superar 200 caracteres'
-            else:
-                cleaned['name'] = str(name).strip()
-
-        if 'description' in data:
-            cleaned['description'] = str(data['description']).strip() if data['description'] else None
-
+            if not data['name'] or not data['name'].strip():
+                errors['name'] = 'El nombre no puede estar vacío'
+        
+        # Validar price (opcional en update, pero si viene debe ser válido)
         if 'price' in data:
             try:
-                price_val = float(data['price'])
-                if price_val < 0:
-                    errors['price'] = 'El precio no puede ser negativo'
-                else:
-                    cleaned['price'] = price_val
+                price = float(data['price'])
+                if price <= 0:
+                    errors['price'] = 'El precio debe ser mayor a 0'
+                data['price'] = price
             except (ValueError, TypeError):
-                errors['price'] = 'El precio debe ser un numero'
-
-        if 'category_ids' in data:
-            category_ids = data['category_ids']
-            if not isinstance(category_ids, list):
-                errors['category_ids'] = 'Debe ser una lista'
-            elif not all(isinstance(i, int) for i in category_ids):
-                errors['category_ids'] = 'Cada elemento debe ser un entero'
-            else:
-                cleaned['category_ids'] = category_ids
-
-        if 'tag_ids' in data:
-            tag_ids = data['tag_ids']
-            if not isinstance(tag_ids, list):
-                errors['tag_ids'] = 'Debe ser una lista'
-            elif not all(isinstance(i, int) for i in tag_ids):
-                errors['tag_ids'] = 'Cada elemento debe ser un entero'
-            else:
-                cleaned['tag_ids'] = tag_ids
-
-        if 'provider_ids' in data:
-            provider_ids = data['provider_ids']
-            if not isinstance(provider_ids, list):
-                errors['provider_ids'] = 'Debe ser una lista'
-            elif not all(isinstance(i, int) for i in provider_ids):
-                errors['provider_ids'] = 'Cada elemento debe ser un entero'
-            else:
-                cleaned['provider_ids'] = provider_ids
-
+                errors['price'] = 'El precio debe ser un número válido'
+        
+        # Si hay errores, retornar None y el dict de errores
         if errors:
             return None, errors
-
-        if not cleaned:
-            return None, {'general': 'No hay campos para actualizar'}
-
-        return cleaned, None
+        
+        return data, None
 
 
 class ProductResponseSchema:
+    """
+    Schema para serializar productos en las respuestas.
+    Maneja dos modos: público y admin.
+    """
+    
     @staticmethod
     def serialize(product, include_admin_fields=False):
         """
-        include_admin_fields=False -> respuesta publica (sin precio ni proveedores)
-        include_admin_fields=True  -> respuesta del admin (precio y proveedores incluidos)
+        Serializa un producto a diccionario.
+        
+        Args:
+            product: Instancia del modelo Product
+            include_admin_fields: Si True, incluye price y providers
+        
+        Returns:
+            Dict con los datos del producto
         """
-        from .category import CategoryResponseSchema
-        from .tag import TagResponseSchema
-        from .provider import ProviderResponseSchema
-
+        # Construir URL de imagen
+        image_url = None
+        if product.image_path:
+            base_url = request.host_url.rstrip('/')
+            image_url = f"{base_url}/uploads/{product.image_path}"
+        
+        # Datos base (siempre se incluyen)
         data = {
-            'id':          product.id,
-            'name':        product.name,
-            'description': product.description,
-            'image_path':  product.image_path,
-            'categories':  CategoryResponseSchema.serialize_many(product.categories),
-            'tags':        TagResponseSchema.serialize_many(product.tags),
-            'created_at':  product.created_at.isoformat() if product.created_at else None,
-            'updated_at':  product.updated_at.isoformat() if product.updated_at else None,
+            'id': product.id,
+            'name': product.name,
+            'description': product.description or '',
+            'image_url': image_url,
+            'categories': [
+                {
+                    'id': cat.id,
+                    'name': cat.name
+                } 
+                for cat in product.categories
+            ],
+            'tags': [
+                {
+                    'id': tag.id,
+                    'name': tag.name
+                }
+                for tag in product.tags
+            ],
         }
-
+        
+        # Datos admin (solo si se solicitan)
         if include_admin_fields:
-            data['price']     = float(product.price) if product.price else None
-            data['providers'] = ProviderResponseSchema.serialize_many(product.providers)
-
+            data['price'] = float(product.price)
+            data['provider_id'] = product.providers[0].id if product.providers else None
+            data['providers'] = [
+                {
+                    'id': prov.id,
+                    'name': prov.name,
+                    'contact': prov.contact,
+                    'phone': prov.phone
+                }
+                for prov in product.providers
+            ]
+        
         return data
-
+    
     @staticmethod
     def serialize_many(products, include_admin_fields=False):
-        return [ProductResponseSchema.serialize(p, include_admin_fields) for p in products]
+        """Serializa una lista de productos"""
+        return [
+            ProductResponseSchema.serialize(p, include_admin_fields) 
+            for p in products
+        ]

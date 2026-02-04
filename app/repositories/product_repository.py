@@ -1,13 +1,13 @@
 from ..database import db
 from ..models import Product
-from ..models.product import product_categories, product_tags
+from ..models.product import product_categories, product_tags, product_providers
 
 
 class ProductRepository:
 
     @staticmethod
-    def get_paginated(page, per_page, category_ids=None, tag_ids=None):
-        """Retorna productos paginados. Filtra por categorias y/o etiquetas si se pasan."""
+    def get_paginated(page, per_page, category_ids=None, tag_ids=None, provider_ids=None):
+        """Retorna productos paginados. Filtra por categorias, etiquetas y/o proveedores si se pasan."""
         query = Product.query
 
         if category_ids:
@@ -23,6 +23,14 @@ class ProductRepository:
                 Product.id.in_(
                     db.session.query(product_tags.c.product_id)
                     .filter(product_tags.c.tag_id.in_(tag_ids))
+                )
+            )
+
+        if provider_ids:
+            query = query.filter(
+                Product.id.in_(
+                    db.session.query(product_providers.c.product_id)
+                    .filter(product_providers.c.provider_id.in_(provider_ids))
                 )
             )
 
@@ -49,16 +57,11 @@ class ProductRepository:
 
     @staticmethod
     def update(product, data, categories=None, tags=None, providers=None):
-        if 'name' in data:
-            product.name = data['name']
-        if 'description' in data:
-            product.description = data['description']
-        if 'price' in data:
-            product.price = data['price']
-        if 'image_path' in data:
-            product.image_path = data['image_path']
+        """Actualiza producto. Solo modifica relaciones si se pasan."""
+        for key, value in data.items():
+            if hasattr(product, key):
+                setattr(product, key, value)
 
-        # Solo reemplaza las relaciones si se pasan explicitamente
         if categories is not None:
             product.categories = categories
         if tags is not None:
