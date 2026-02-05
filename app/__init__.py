@@ -1,18 +1,25 @@
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify
 from flask_cors import CORS
 from .config import Config
 from .database import db
 from .utils.errors import register_error_handlers
+from .utils.file import init_cloudinary
 
 
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    # CORS configurado para permitir localhost:5173
+    # Inicializar Cloudinary
+    with app.app_context():
+        init_cloudinary()
+
+    # CORS configurado para permitir localhost:5173 y tu dominio de producción
+    allowed_origins = app.config.get('CORS_ORIGINS', 'http://localhost:5173').split(',')
+    
     CORS(app, resources={
         r"/api/*": {
-            "origins": ["http://localhost:5173", "http://127.0.0.1:5173"],
+            "origins": allowed_origins,
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization"],
             "expose_headers": ["Content-Type"],
@@ -47,8 +54,6 @@ def create_app():
     def health():
         return jsonify({'status': 'ok'})
 
-    @app.route('/uploads/<path:filename>')
-    def serve_upload(filename):
-        return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    # Ya no necesitamos servir uploads porque Cloudinary lo hace
 
     return app

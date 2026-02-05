@@ -1,7 +1,7 @@
 """
 Schemas para validación y serialización de productos.
+ACTUALIZADO PARA CLOUDINARY
 """
-from flask import request
 
 
 class ProductCreateSchema:
@@ -77,7 +77,7 @@ class ProductUpdateSchema:
 class ProductResponseSchema:
     """
     Schema para serializar productos en las respuestas.
-    Maneja dos modos: público y admin.
+    ACTUALIZADO PARA CLOUDINARY: image_path contiene URL completa
     """
     
     @staticmethod
@@ -92,11 +92,8 @@ class ProductResponseSchema:
         Returns:
             Dict con los datos del producto
         """
-        # Construir URL de imagen
-        image_url = None
-        if product.image_path:
-            base_url = request.host_url.rstrip('/')
-            image_url = f"{base_url}/uploads/{product.image_path}"
+        # CLOUDINARY: image_path ya contiene URL completa
+        image_url = product.image_path  # Ya es URL completa o None
         
         # Datos base (siempre se incluyen)
         data = {
