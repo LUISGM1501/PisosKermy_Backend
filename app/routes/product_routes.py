@@ -4,7 +4,7 @@ from ..services.product_service import ProductService
 from ..schemas.product import ProductCreateSchema, ProductUpdateSchema, ProductResponseSchema
 from ..utils.auth import require_auth
 from ..utils.audit import log_audit
-from ..utils.errors import ValidationError
+from ..utils.errors import ValidationError, AppError
 
 product_bp = Blueprint('products', __name__)
 
@@ -55,10 +55,8 @@ def _get_filter_ids(param_name):
     Obtiene IDs de filtro del request. Acepta tanto valores únicos como múltiples.
     Ejemplo: ?category_id=1 o ?category_id=1&category_id=2
     """
-    # Intentar obtener lista de valores múltiples
     ids = request.args.getlist(param_name, type=int)
     
-    # Si no hay valores múltiples, intentar valor único
     if not ids:
         single_id = request.args.get(param_name, type=int)
         if single_id:
@@ -68,7 +66,7 @@ def _get_filter_ids(param_name):
 
 
 # ---------------------------------------------------------------------------
-# Publico - catalogo con paginacion y filtros por categoria, etiqueta y búsqueda
+# Publico - catalogo con paginacion y filtros
 # ---------------------------------------------------------------------------
 
 @product_bp.route('/api/products', methods=['GET'])
@@ -76,14 +74,14 @@ def list_products():
     page = request.args.get('page', 1, type=int)
     category_ids = _get_filter_ids('category_id')
     tag_ids = _get_filter_ids('tag_id')
-    search = request.args.get('search', type=str, default='').strip()  # NUEVO
+    search = request.args.get('search', type=str, default='').strip()
 
     paginated = ProductService.list_paginated(
         page=page,
         per_page=PER_PAGE,
         category_ids=category_ids,
         tag_ids=tag_ids,
-        search=search if search else None,  # NUEVO
+        search=search if search else None,
     )
 
     return jsonify({
@@ -103,7 +101,7 @@ def get_product(product_id):
 
 
 # ---------------------------------------------------------------------------
-# Admin - CRUD completo, incluye precio y proveedores en la respuesta
+# Admin - CRUD completo
 # ---------------------------------------------------------------------------
 
 @product_bp.route('/api/admin/products', methods=['GET'])
@@ -113,7 +111,7 @@ def admin_list_products():
     category_ids = _get_filter_ids('category_id')
     tag_ids = _get_filter_ids('tag_id')
     provider_ids = _get_filter_ids('provider_id')
-    search = request.args.get('search', type=str, default='').strip()  # NUEVO
+    search = request.args.get('search', type=str, default='').strip()
 
     paginated = ProductService.list_paginated(
         page=page,
@@ -121,7 +119,7 @@ def admin_list_products():
         category_ids=category_ids,
         tag_ids=tag_ids,
         provider_ids=provider_ids,
-        search=search if search else None,  # NUEVO
+        search=search if search else None,
     )
 
     return jsonify({
@@ -149,15 +147,23 @@ def create_product():
     if errors:
         raise ValidationError(errors)
 
-    image_file = request.files.get('image')
-    product = ProductService.create(validated, image_file)
+    # NUEVO: Obtener múltiples imágenes
+    image_files = request.files.getlist('images')  # Lista de archivos
+    
+    # Si no hay múltiples, intentar con campo 'image' legacy
+    if not image_files:
+        single_image = request.files.get('image')
+        if single_image:
+            image_files = [single_image]
+
+    product = ProductService.create(validated, image_files if image_files else None)
 
     log_audit(
         admin_id=request.current_admin.id,
         action='CREATE',
         entity='product',
         entity_id=product.id,
-        details={'name': product.name}
+        details={'name': product.name, 'images_count': len(image_files) if image_files else 0}
     )
 
     return jsonify(ProductResponseSchema.serialize(product, include_admin_fields=True)), 201
@@ -171,15 +177,32 @@ def update_product(product_id):
     if errors:
         raise ValidationError(errors)
 
-    image_file = request.files.get('image')
-    product, old_image = ProductService.update(product_id, validated, image_file)
+    # NUEVO: Obtener múltiples imágenes
+    image_files = request.files.getlist('images')
+    
+    # Si no hay múltiples, intentar con campo 'image' legacy
+    if not image_files:
+        single_image = request.files.get('image')
+        if single_image:
+            image_files = [single_image]
+    
+    # Determinar si mantener imágenes existentes
+    # Si se envían nuevas imágenes, por defecto NO mantener las viejas
+    keep_existing = False if image_files else True
+
+    product = ProductService.update(
+        product_id, 
+        validated, 
+        image_files if image_files else None,
+        keep_existing_images=keep_existing
+    )
 
     log_audit(
         admin_id=request.current_admin.id,
         action='UPDATE',
         entity='product',
         entity_id=product_id,
-        details={'name': product.name, 'image_changed': old_image != product.image_path}
+        details={'name': product.name, 'new_images_count': len(image_files) if image_files else 0}
     )
 
     return jsonify(ProductResponseSchema.serialize(product, include_admin_fields=True))
@@ -199,3 +222,41 @@ def delete_product(product_id):
     )
 
     return jsonify({'message': 'Producto eliminado'})
+
+
+# ---------------------------------------------------------------------------
+# Endpoints para gestión de imágenes individuales
+# ---------------------------------------------------------------------------
+
+@product_bp.route('/api/admin/products/<int:product_id>/images/<int:image_id>', methods=['DELETE'])
+@require_auth
+def delete_product_image(product_id, image_id):
+    """Eliminar una imagen específica del producto"""
+    ProductService.delete_product_image(product_id, image_id)
+    
+    log_audit(
+        admin_id=request.current_admin.id,
+        action='DELETE_IMAGE',
+        entity='product',
+        entity_id=product_id,
+        details={'image_id': image_id}
+    )
+    
+    return jsonify({'message': 'Imagen eliminada'})
+
+
+@product_bp.route('/api/admin/products/<int:product_id>/images/<int:image_id>/set-primary', methods=['PUT'])
+@require_auth
+def set_primary_image(product_id, image_id):
+    """Marcar una imagen como principal"""
+    ProductService.set_primary_image(product_id, image_id)
+    
+    log_audit(
+        admin_id=request.current_admin.id,
+        action='SET_PRIMARY_IMAGE',
+        entity='product',
+        entity_id=product_id,
+        details={'image_id': image_id}
+    )
+    
+    return jsonify({'message': 'Imagen marcada como principal'})

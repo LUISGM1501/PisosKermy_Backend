@@ -1,142 +1,154 @@
 """
-Schemas para validación y serialización de productos.
-ACTUALIZADO PARA CLOUDINARY
+Schemas para Product con soporte de múltiples imágenes
 """
 
+from ..utils.file import get_image_url
 
-class ProductCreateSchema:
-    """Schema para validar creación de productos"""
+
+class ProductImageSchema:
+    """Schema para serializar ProductImage"""
     
     @staticmethod
-    def validate(data):
-        errors = {}
+    def serialize(product_image):
+        """Serializar una imagen de producto"""
+        if not product_image:
+            return None
         
-        # Validar name (requerido)
-        if not data.get('name') or not data['name'].strip():
-            errors['name'] = 'El nombre es obligatorio'
-        
-        # Validar price (requerido, debe ser número positivo)
-        try:
-            price = float(data.get('price', 0))
-            if price <= 0:
-                errors['price'] = 'El precio debe ser mayor a 0'
-            data['price'] = price
-        except (ValueError, TypeError):
-            errors['price'] = 'El precio debe ser un número válido'
-        
-        # Validar category_ids (requerido, al menos una)
-        category_ids = data.get('category_ids', [])
-        if not category_ids or len(category_ids) == 0:
-            errors['category_ids'] = 'Debe seleccionar al menos una categoría'
-        
-        # Validar tag_ids (opcional, pero debe ser lista si existe)
-        if 'tag_ids' not in data:
-            data['tag_ids'] = []
-        
-        # Validar provider_ids (opcional, pero debe ser lista si existe)
-        if 'provider_ids' not in data:
-            data['provider_ids'] = []
-        
-        # Si hay errores, retornar None y el dict de errores
-        if errors:
-            return None, errors
-        
-        # Retornar datos validados
-        return data, None
-
-
-class ProductUpdateSchema:
-    """Schema para validar actualización de productos"""
+        return {
+            'id': product_image.id,
+            'image_url': get_image_url(product_image.image_path),
+            'is_primary': product_image.is_primary,
+            'display_order': product_image.display_order,
+        }
     
     @staticmethod
-    def validate(data):
-        errors = {}
-        
-        # Validar name (opcional en update, pero si viene debe tener valor)
-        if 'name' in data:
-            if not data['name'] or not data['name'].strip():
-                errors['name'] = 'El nombre no puede estar vacío'
-        
-        # Validar price (opcional en update, pero si viene debe ser válido)
-        if 'price' in data:
-            try:
-                price = float(data['price'])
-                if price <= 0:
-                    errors['price'] = 'El precio debe ser mayor a 0'
-                data['price'] = price
-            except (ValueError, TypeError):
-                errors['price'] = 'El precio debe ser un número válido'
-        
-        # Si hay errores, retornar None y el dict de errores
-        if errors:
-            return None, errors
-        
-        return data, None
+    def serialize_many(product_images):
+        """Serializar múltiples imágenes"""
+        return [ProductImageSchema.serialize(img) for img in product_images]
 
 
 class ProductResponseSchema:
-    """
-    Schema para serializar productos en las respuestas.
-    ACTUALIZADO PARA CLOUDINARY: image_path contiene URL completa
-    """
+    """Schema para respuestas de productos"""
     
     @staticmethod
     def serialize(product, include_admin_fields=False):
         """
-        Serializa un producto a diccionario.
+        Serializar un producto.
         
         Args:
-            product: Instancia del modelo Product
-            include_admin_fields: Si True, incluye price y providers
-        
-        Returns:
-            Dict con los datos del producto
+            product: Instancia de Product
+            include_admin_fields: Si True, incluye precio y proveedores (solo admin)
         """
-        # CLOUDINARY: image_path ya contiene URL completa
-        image_url = product.image_path  # Ya es URL completa o None
+        if not product:
+            return None
         
-        # Datos base (siempre se incluyen)
+        # Datos básicos (públicos)
         data = {
             'id': product.id,
             'name': product.name,
-            'description': product.description or '',
-            'image_url': image_url,
-            'categories': [
-                {
-                    'id': cat.id,
-                    'name': cat.name
-                } 
-                for cat in product.categories
-            ],
-            'tags': [
-                {
-                    'id': tag.id,
-                    'name': tag.name
-                }
-                for tag in product.tags
-            ],
+            'description': product.description,
+            'categories': [{'id': c.id, 'name': c.name} for c in product.categories],
+            'tags': [{'id': t.id, 'name': t.name} for t in product.tags],
+            
+            # NUEVO: Múltiples imágenes
+            'images': ProductImageSchema.serialize_many(product.images),
+            
+            # Compatibilidad: imagen principal
+            'image_url': product.image_url,
         }
         
-        # Datos admin (solo si se solicitan)
+        # Campos solo para admin
         if include_admin_fields:
-            data['price'] = float(product.price)
-            data['provider_id'] = product.providers[0].id if product.providers else None
-            data['providers'] = [
-                {
-                    'id': prov.id,
-                    'name': prov.name,
-                    'contact': prov.contact,
-                    'phone': prov.phone
-                }
-                for prov in product.providers
-            ]
+            data['price'] = float(product.price) if product.price else 0.0
+            data['providers'] = [{'id': p.id, 'name': p.name} for p in product.providers]
         
         return data
     
     @staticmethod
     def serialize_many(products, include_admin_fields=False):
-        """Serializa una lista de productos"""
-        return [
-            ProductResponseSchema.serialize(p, include_admin_fields) 
-            for p in products
-        ]
+        """Serializar múltiples productos"""
+        return [ProductResponseSchema.serialize(p, include_admin_fields) for p in products]
+
+
+class ProductCreateSchema:
+    """Schema para crear producto"""
+    
+    @staticmethod
+    def validate(data):
+        """
+        Validar datos para crear producto.
+        
+        Returns:
+            (validated_data, errors)
+        """
+        errors = {}
+        
+        # Validar nombre
+        if not data.get('name'):
+            errors['name'] = 'El nombre es requerido'
+        elif len(data['name']) > 200:
+            errors['name'] = 'El nombre no puede tener más de 200 caracteres'
+        
+        # Validar precio
+        if 'price' not in data:
+            errors['price'] = 'El precio es requerido'
+        else:
+            try:
+                price = float(data['price'])
+                if price < 0:
+                    errors['price'] = 'El precio no puede ser negativo'
+            except (ValueError, TypeError):
+                errors['price'] = 'El precio debe ser un número válido'
+        
+        # Validar arrays (pueden estar vacíos)
+        for field in ['category_ids', 'tag_ids', 'provider_ids']:
+            if field not in data:
+                data[field] = []
+            elif not isinstance(data[field], list):
+                errors[field] = f'{field} debe ser un array'
+        
+        if errors:
+            return None, errors
+        
+        return data, None
+
+
+class ProductUpdateSchema:
+    """Schema para actualizar producto"""
+    
+    @staticmethod
+    def validate(data):
+        """
+        Validar datos para actualizar producto.
+        Similar a ProductCreateSchema pero todos los campos son opcionales.
+        
+        Returns:
+            (validated_data, errors)
+        """
+        errors = {}
+        
+        # Validar nombre (opcional)
+        if 'name' in data:
+            if not data['name']:
+                errors['name'] = 'El nombre no puede estar vacío'
+            elif len(data['name']) > 200:
+                errors['name'] = 'El nombre no puede tener más de 200 caracteres'
+        
+        # Validar precio (opcional)
+        if 'price' in data:
+            try:
+                price = float(data['price'])
+                if price < 0:
+                    errors['price'] = 'El precio no puede ser negativo'
+            except (ValueError, TypeError):
+                errors['price'] = 'El precio debe ser un número válido'
+        
+        # Validar arrays (opcionales)
+        for field in ['category_ids', 'tag_ids', 'provider_ids']:
+            if field in data and not isinstance(data[field], list):
+                errors[field] = f'{field} debe ser un array'
+        
+        if errors:
+            return None, errors
+        
+        return data, None

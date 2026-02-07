@@ -44,6 +44,23 @@ def save_image(file):
         return None
 
 
+def get_image_url(image_path):
+    """
+    Retorna la URL completa de una imagen.
+    Como usamos Cloudinary, image_path ya es la URL completa.
+    """
+    if not image_path:
+        return None
+    
+    # Si ya es una URL de Cloudinary, retornarla directamente
+    if image_path.startswith('http://') or image_path.startswith('https://'):
+        return image_path
+    
+    # Si es un path relativo (legacy), construir URL
+    # Esto no debería pasar con Cloudinary, pero por compatibilidad
+    return image_path
+
+
 def delete_image(image_url):
     """
     Elimina una imagen de Cloudinary dado su URL.
