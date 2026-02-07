@@ -36,6 +36,7 @@ def create_app():
 
     # Blueprints
     from .routes.auth_routes         import auth_bp
+    from .routes.admin_routes        import admin_bp  # NUEVO
     from .routes.category_routes     import category_bp
     from .routes.tag_routes          import tag_bp
     from .routes.provider_routes     import provider_bp
@@ -43,6 +44,7 @@ def create_app():
     from .routes.site_content_routes import site_content_bp
 
     app.register_blueprint(auth_bp)
+    app.register_blueprint(admin_bp)  # NUEVO
     app.register_blueprint(category_bp)
     app.register_blueprint(tag_bp)
     app.register_blueprint(provider_bp)

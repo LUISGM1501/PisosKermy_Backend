@@ -21,44 +21,29 @@ class AdminService:
 
     @staticmethod
     def create(validated_data):
-        """Crear un nuevo administrador.
-        
-        Args:
-            validated_data: Dict con email, name, password
-            
-        Returns:
-            Admin creado
-            
-        Raises:
-            AppError: Si el email ya existe
-        """
+        """Crear un nuevo administrador."""
         email = validated_data['email']
         name = validated_data['name']
         password = validated_data['password']
 
-        # Verificar que el email no exista
         if AdminRepository.get_by_email(email):
             raise AppError('El email ya esta registrado', 409)
 
         return AdminRepository.create(email, name, password)
 
     @staticmethod
-    def update(admin_id, validated_data):
+    def update(admin_id, validated_data, current_admin_id):
         """Actualizar datos de un administrador.
         
-        Args:
-            admin_id: ID del admin a actualizar
-            validated_data: Dict con email y/o name
-            
-        Returns:
-            Tupla (admin_actualizado, datos_anteriores) para auditoria
-            
-        Raises:
-            AppError: Si el admin no existe o el email ya esta en uso
+        PROTECCION: Solo el admin 1 puede modificar al admin 1
         """
         admin = AdminRepository.get_by_id(admin_id)
         if not admin:
             raise AppError('Admin no encontrado', 404)
+
+        # PROTECCION: Solo admin 1 puede modificar admin 1
+        if admin_id == 1 and current_admin_id != 1:
+            raise AppError('No tienes permisos para modificar al administrador principal', 403)
 
         old_data = {
             'email': admin.email,
@@ -68,7 +53,6 @@ class AdminService:
         new_email = validated_data.get('email')
         new_name = validated_data.get('name')
 
-        # Si se proporciona un nuevo email, verificar que no este en uso
         if new_email and new_email != admin.email:
             existing = AdminRepository.get_by_email(new_email)
             if existing and existing.id != admin_id:
@@ -78,22 +62,18 @@ class AdminService:
         return updated, old_data
 
     @staticmethod
-    def change_password(admin_id, validated_data):
+    def change_password(admin_id, validated_data, current_admin_id):
         """Cambiar contraseña de un administrador.
         
-        Args:
-            admin_id: ID del admin
-            validated_data: Dict con password
-            
-        Returns:
-            Admin actualizado
-            
-        Raises:
-            AppError: Si el admin no existe
+        PROTECCION: Solo el admin 1 puede cambiar password del admin 1
         """
         admin = AdminRepository.get_by_id(admin_id)
         if not admin:
             raise AppError('Admin no encontrado', 404)
+
+        # PROTECCION: Solo admin 1 puede cambiar password de admin 1
+        if admin_id == 1 and current_admin_id != 1:
+            raise AppError('No tienes permisos para cambiar la contraseña del administrador principal', 403)
 
         new_password = validated_data['password']
         return AdminRepository.update_password(admin, new_password)
@@ -102,19 +82,17 @@ class AdminService:
     def toggle_status(admin_id, current_admin_id):
         """Activar/Desactivar un administrador.
         
-        Args:
-            admin_id: ID del admin a cambiar
-            current_admin_id: ID del admin que ejecuta la accion
-            
-        Returns:
-            Tupla (admin_actualizado, accion_realizada) para auditoria
-            
-        Raises:
-            AppError: Si el admin no existe o intenta desactivarse a si mismo
+        PROTECCIONES:
+        - No puede desactivarse a si mismo
+        - NO se puede desactivar al admin 1 (nunca)
         """
-        # Validar que no intente desactivarse a si mismo
+        # No puede desactivarse a si mismo
         if admin_id == current_admin_id:
             raise AppError('No puedes desactivar tu propia cuenta', 400)
+
+        # PROTECCION: NADIE puede desactivar al admin 1
+        if admin_id == 1:
+            raise AppError('No se puede desactivar al administrador principal', 403)
 
         admin = AdminRepository.get_by_id(admin_id)
         if not admin:
@@ -125,3 +103,30 @@ class AdminService:
         
         action = 'ACTIVATE_ADMIN' if updated.is_active else 'DEACTIVATE_ADMIN'
         return updated, action, old_status
+
+    @staticmethod
+    def delete(admin_id, current_admin_id):
+        """Eliminar un administrador permanentemente.
+        
+        PROTECCIONES:
+        - No puede eliminarse a si mismo
+        - NO se puede eliminar al admin 1 (nunca)
+        """
+        # No puede eliminarse a si mismo
+        if admin_id == current_admin_id:
+            raise AppError('No puedes eliminar tu propia cuenta', 400)
+
+        # PROTECCION: NADIE puede eliminar al admin 1
+        if admin_id == 1:
+            raise AppError('No se puede eliminar al administrador principal', 403)
+
+        admin = AdminRepository.get_by_id(admin_id)
+        if not admin:
+            raise AppError('Admin no encontrado', 404)
+
+        email = admin.email
+        name = admin.name
+        
+        AdminRepository.delete(admin)
+        
+        return email, name
