@@ -55,20 +55,27 @@ class ProductService:
         return result
 
     @staticmethod
-    def _save_product_images(product, image_files, primary_index=0):
+    def _save_product_images(product, image_files):
         """
         Guardar múltiples imágenes para un producto.
+        
+        LÓGICA:
+        - Si el producto YA tiene imágenes: las nuevas se agregan sin marcar ninguna como principal
+        - Si el producto NO tiene imágenes: la primera se marca como principal
+        - El admin usa el endpoint set_primary_image para cambiar la principal manualmente
         
         Args:
             product: Instancia de Product
             image_files: Lista de archivos de imagen
-            primary_index: Índice de la imagen que será principal (default: 0)
         
         Returns:
             Lista de ProductImage creadas
         """
         if not image_files:
             return []
+        
+        # Verificar si el producto YA tiene imágenes
+        is_new_product = len(product.images) == 0
         
         saved_images = []
         
@@ -79,11 +86,14 @@ class ProductService:
                 continue  # Saltar si el tipo no es válido
             
             # Crear ProductImage
+            # Solo marcar como principal si es producto NUEVO y es la primera imagen
+            should_be_primary = is_new_product and i == 0
+            
             product_image = ProductImage(
                 product_id=product.id,
                 image_path=image_path,
-                is_primary=(i == primary_index),
-                display_order=i
+                is_primary=should_be_primary,
+                display_order=len(product.images) + len(saved_images)  # Continuar desde las existentes
             )
             db.session.add(product_image)
             saved_images.append(product_image)
@@ -92,8 +102,10 @@ class ProductService:
             db.session.flush()  # Para obtener IDs
             
             # Actualizar product.image_path con la imagen principal (compatibilidad)
-            primary_img = next((img for img in saved_images if img.is_primary), saved_images[0])
-            product.image_path = primary_img.image_path
+            all_images = list(product.images) + saved_images
+            primary_img = next((img for img in all_images if img.is_primary), all_images[0] if all_images else None)
+            if primary_img:
+                product.image_path = primary_img.image_path
         
         return saved_images
 
@@ -161,7 +173,7 @@ class ProductService:
                     db.session.delete(img)
                 db.session.flush()
             
-            # Guardar nuevas imágenes
+            # Guardar nuevas imágenes (NO marcarán ninguna como principal si ya existen imágenes)
             ProductService._save_product_images(product, image_files)
             db.session.commit()
 
