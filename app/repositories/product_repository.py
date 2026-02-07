@@ -6,9 +6,14 @@ from ..models.product import product_categories, product_tags, product_providers
 class ProductRepository:
 
     @staticmethod
-    def get_paginated(page, per_page, category_ids=None, tag_ids=None, provider_ids=None):
-        """Retorna productos paginados. Filtra por categorias, etiquetas y/o proveedores si se pasan."""
+    def get_paginated(page, per_page, category_ids=None, tag_ids=None, provider_ids=None, search=None):
+        """Retorna productos paginados. Filtra por categorias, etiquetas, proveedores y/o búsqueda por nombre."""
         query = Product.query
+
+        # Búsqueda por nombre (insensible a mayúsculas/minúsculas)
+        if search:
+            search_pattern = f'%{search}%'
+            query = query.filter(Product.name.ilike(search_pattern))
 
         if category_ids:
             query = query.filter(

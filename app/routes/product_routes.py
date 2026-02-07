@@ -68,7 +68,7 @@ def _get_filter_ids(param_name):
 
 
 # ---------------------------------------------------------------------------
-# Publico - catalogo con paginacion y filtros por categoria y etiqueta
+# Publico - catalogo con paginacion y filtros por categoria, etiqueta y búsqueda
 # ---------------------------------------------------------------------------
 
 @product_bp.route('/api/products', methods=['GET'])
@@ -76,12 +76,14 @@ def list_products():
     page = request.args.get('page', 1, type=int)
     category_ids = _get_filter_ids('category_id')
     tag_ids = _get_filter_ids('tag_id')
+    search = request.args.get('search', type=str, default='').strip()  # NUEVO
 
     paginated = ProductService.list_paginated(
         page=page,
         per_page=PER_PAGE,
         category_ids=category_ids,
         tag_ids=tag_ids,
+        search=search if search else None,  # NUEVO
     )
 
     return jsonify({
@@ -111,6 +113,7 @@ def admin_list_products():
     category_ids = _get_filter_ids('category_id')
     tag_ids = _get_filter_ids('tag_id')
     provider_ids = _get_filter_ids('provider_id')
+    search = request.args.get('search', type=str, default='').strip()  # NUEVO
 
     paginated = ProductService.list_paginated(
         page=page,
@@ -118,6 +121,7 @@ def admin_list_products():
         category_ids=category_ids,
         tag_ids=tag_ids,
         provider_ids=provider_ids,
+        search=search if search else None,  # NUEVO
     )
 
     return jsonify({
