@@ -147,7 +147,7 @@ def create_product():
     if errors:
         raise ValidationError(errors)
 
-    # NUEVO: Obtener múltiples imágenes
+    # Obtener múltiples imágenes
     image_files = request.files.getlist('images')  # Lista de archivos
     
     # Si no hay múltiples, intentar con campo 'image' legacy
@@ -177,7 +177,7 @@ def update_product(product_id):
     if errors:
         raise ValidationError(errors)
 
-    # NUEVO: Obtener múltiples imágenes
+    # Obtener múltiples imágenes
     image_files = request.files.getlist('images')
     
     # Si no hay múltiples, intentar con campo 'image' legacy
@@ -186,9 +186,9 @@ def update_product(product_id):
         if single_image:
             image_files = [single_image]
     
-    # Determinar si mantener imágenes existentes
-    # Si se envían nuevas imágenes, por defecto NO mantener las viejas
-    keep_existing = False if image_files else True
+    # SIEMPRE mantener imagenes existentes al agregar nuevas
+    # El frontend usa DELETE endpoints especificos para eliminar imagenes individuales
+    keep_existing = True  # FIX: Siempre mantener imagenes existentes
 
     product = ProductService.update(
         product_id, 
